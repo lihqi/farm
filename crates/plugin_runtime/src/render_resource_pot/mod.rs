@@ -1,4 +1,5 @@
 use std::{
+  cmp::Ordering,
   collections::{HashMap, HashSet},
   path::PathBuf,
   sync::Arc,
@@ -18,13 +19,18 @@ use farmfe_core::{
     magic_string::{MagicString, MagicStringOptions},
   },
   error::{CompilationError, Result},
-  module::{module_graph::ModuleGraph, ModuleId, ModuleSystem},
+  module::{
+    module_graph::{self, ModuleGraph},
+    Module, ModuleId, ModuleSystem,
+  },
   parking_lot::Mutex,
   rayon::iter::{IntoParallelIterator, ParallelIterator},
   resource::resource_pot::{RenderedModule, ResourcePot},
   serialize,
-  swc_common::{comments::SingleThreadedComments, util::take::Take, Mark, DUMMY_SP},
-  swc_ecma_ast::{BindingIdent, BlockStmt, FnDecl, Function, Module, ModuleItem, Param, Stmt}, // swc_ecma_ast::Function
+  swc_common::{comments::SingleThreadedComments, util::take::Take, Mark, SourceMap, DUMMY_SP},
+  swc_ecma_ast::{
+    BindingIdent, BlockStmt, FnDecl, Function, Module as EcmaAstModule, ModuleItem, Param, Stmt,
+  }, // swc_ecma_ast::Function
 };
 use farmfe_toolkit::{
   common::{build_source_map, create_swc_source_map, PathFilter, Source},
@@ -53,7 +59,83 @@ use farmfe_utils::hash::sha256;
 use self::source_replacer::{ExistingCommonJsRequireVisitor, SourceReplacer};
 
 // mod farm_module_system;
+pub mod resource_pot_to_bundle;
 mod source_replacer;
+
+pub fn process_ast_module(
+  module: &Module,
+  cloned_module: &mut EcmaAstModule,
+  module_graph: &ModuleGraph,
+  context: &Arc<CompilationContext>,
+  comments: SingleThreadedComments,
+  cm: Arc<SourceMap>,
+) -> Result<Vec<String>> {
+  let m_id = &module.id;
+  let mut external_modules = vec![];
+  try_with(cm.clone(), &context.meta.script.globals, || {
+    let (unresolved_mark, top_level_mark) = if module.meta.as_script().unresolved_mark == 0
+      && module.meta.as_script().top_level_mark == 0
+    {
+      resolve_module_mark(cloned_module, module.module_type.is_typescript(), context)
+    } else {
+      let unresolved_mark = Mark::from_u32(module.meta.as_script().unresolved_mark);
+      let top_level_mark = Mark::from_u32(module.meta.as_script().top_level_mark);
+      (unresolved_mark, top_level_mark)
+    };
+
+    // replace commonjs require('./xxx') to require('./xxx', true)
+    if matches!(
+      module.meta.as_script().module_system,
+      ModuleSystem::CommonJs | ModuleSystem::Hybrid
+    ) {
+      cloned_module.visit_mut_with(&mut ExistingCommonJsRequireVisitor::new(
+        unresolved_mark,
+        top_level_mark,
+      ));
+    }
+
+    cloned_module.visit_mut_with(&mut paren_remover(Some(&comments)));
+
+    // ESM to commonjs, then commonjs to farm's runtime module systems
+    if matches!(
+      module.meta.as_script().module_system,
+      ModuleSystem::EsModule | ModuleSystem::Hybrid
+    ) {
+      cloned_module.visit_mut_with(&mut import_analyzer(ImportInterop::Swc, true));
+      cloned_module.visit_mut_with(&mut inject_helpers(unresolved_mark));
+      cloned_module.visit_mut_with(&mut common_js::<&SingleThreadedComments>(
+        unresolved_mark,
+        Config {
+          ignore_dynamic: true,
+          preserve_import_meta: true,
+          ..Default::default()
+        },
+        enable_available_feature_from_es_version(context.config.script.target),
+        Some(&comments),
+      ));
+    }
+
+    // replace import source with module id
+    let mut source_replacer = SourceReplacer::new(
+      unresolved_mark,
+      top_level_mark,
+      module_graph,
+      m_id.clone(),
+      context.config.mode.clone(),
+    );
+    cloned_module.visit_mut_with(&mut source_replacer);
+    cloned_module.visit_mut_with(&mut hygiene_with_config(HygieneConfig {
+      top_level_mark,
+      ..Default::default()
+    }));
+
+    cloned_module.visit_mut_with(&mut fixer(Some(&comments)));
+
+    external_modules.extend(source_replacer.external_modules);
+  })?;
+
+  Ok(external_modules)
+}
 
 /// Merge all modules' ast in a [ResourcePot] to Farm's runtime [ObjectLit]. The [ObjectLit] looks like:
 /// ```js
@@ -386,7 +468,7 @@ pub fn resource_pot_to_runtime_object(
 ///   exports.b = b;
 /// }
 /// ```
-fn wrap_function(module: &mut Module, unresolved_mark: Mark) {
+fn wrap_function(module: &mut EcmaAstModule, unresolved_mark: Mark) {
   let body = module.body.take();
 
   module.body.push(ModuleItem::Stmt(Stmt::Decl(

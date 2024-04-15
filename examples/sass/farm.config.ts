@@ -13,6 +13,7 @@ export default defineConfig({
         '@': path.resolve('src')
       }
     },
+    minify: false,
     define: {
       BTN: 'Click me',
     },

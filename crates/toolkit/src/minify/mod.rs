@@ -26,6 +26,7 @@ pub fn minify_js_module(
 ) {
   let options = NormalizedMinifyOptions::minify_options_for_module(minify_options)
     .into_js_minify_options(cm.clone());
+
   ast.visit_mut_with(&mut paren_remover(Some(&comments)));
 
   ast.visit_mut_with(&mut resolver(unresolved_mark, top_level_mark, false));

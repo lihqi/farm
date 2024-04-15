@@ -32,7 +32,10 @@ use farmfe_toolkit::{
 };
 
 use insert_runtime_plugins::insert_runtime_plugins;
-use render_resource_pot::*;
+use render_resource_pot::{
+  resource_pot_to_bundle::{BundleAnalyzer, SharedBundle},
+  *,
+};
 
 pub const RUNTIME_SUFFIX: &str = ".farm-runtime";
 
@@ -268,29 +271,35 @@ impl Plugin for FarmPluginRuntime {
 
     let module_graph = context.module_graph.write();
 
-    for resource_pot in resource_pots {
-      if matches!(resource_pot.resource_pot_type, ResourcePotType::Runtime) {
-        let RenderedJsResourcePot { mut bundle, .. } =
-          resource_pot_to_runtime_object(resource_pot, &module_graph, context)?;
+    let mut have_runtime = false;
 
-        bundle.prepend(
-          r#"(function(r,e){var t={};function n(r){return Promise.resolve(o(r))}function o(e){if(t[e])return t[e].exports;var i={id:e,exports:{}};r[e](i,i.exports,o,n);t[e]=i;return i.exports}o(e)})("#,
-        );
+    let mut shared_bundle = SharedBundle::new(&*resource_pots, &module_graph, context);
 
-        bundle.append(
-          &format!(
-            ",{:?});",
-            resource_pot
-              .entry_module
-              .as_ref()
-              .unwrap()
-              .id(context.config.mode.clone())
-          ),
-          None,
-        );
+    shared_bundle.render()?;
 
-        *self.runtime_code.lock() = Arc::new(bundle.to_string());
-        break;
+    for resource_pot in resource_pots.iter() {
+      match resource_pot.resource_pot_type {
+        ResourcePotType::Runtime => {
+          let bundle = shared_bundle.codegen(&resource_pot.id)?;
+
+          if have_runtime {
+            continue;
+          }
+
+          have_runtime = true;
+          *self.runtime_code.lock() = Arc::new(bundle.to_string());
+        }
+        ResourcePotType::Js => {
+          let bundle = shared_bundle.codegen(&resource_pot.id)?;
+
+          println!(
+            "\n\n// root: {}\n// resource_pot {}\n{}\n",
+            context.config.root,
+            resource_pot.id,
+            bundle.to_string()
+          );
+        }
+        _ => {}
       }
     }
 

@@ -51,14 +51,13 @@ import type {
 import { normalizeExternal } from './normalize-config/normalize-external.js';
 import { DEFAULT_CONFIG_NAMES, FARM_DEFAULT_NAMESPACE } from './constants.js';
 import merge from '../utils/merge.js';
+import { UserConfigFn } from 'vite';
 
 export * from './types.js';
 export function defineFarmConfig(config: UserConfig): UserConfig;
-export function defineFarmConfig(
-  config: Promise<UserConfig>
-): Promise<UserConfig>;
-export function defineFarmConfig(config: UserConfigExport): UserConfigExport;
-export function defineFarmConfig(config: UserConfigExport): UserConfigExport {
+export function defineFarmConfig(config: Promise<UserConfig>): Promise<UserConfig>;
+export function defineFarmConfig(config: UserConfigFn): UserConfigFn;
+export function defineFarmConfig(config: UserConfig | Promise<UserConfig> | UserConfigFn): UserConfig | Promise<UserConfig> | UserConfigFn {
   return config;
 }
 

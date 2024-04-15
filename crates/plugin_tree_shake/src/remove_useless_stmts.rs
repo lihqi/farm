@@ -4,7 +4,8 @@ use farmfe_core::{
   module::{module_graph::ModuleGraph, ModuleId},
   swc_common::{Globals, Mark},
   swc_ecma_ast::{
-    self, Ident, ImportDecl, ImportSpecifier, ModuleDecl, ModuleExportName, ModuleItem, Stmt,
+    self, ExportSpecifier, Ident, ImportDecl, ImportSpecifier, ModuleDecl, ModuleExportName,
+    ModuleItem, Stmt,
   },
 };
 use farmfe_toolkit::swc_ecma_visit::{VisitMut, VisitMutWith, VisitWith};
@@ -452,7 +453,6 @@ impl VisitMut for UselessExportStmtRemover {
     specifiers: &mut Vec<farmfe_core::swc_ecma_ast::ExportSpecifier>,
   ) {
     let mut specifiers_to_remove = vec![];
-
     for (index, specifier) in specifiers.iter().enumerate() {
       if !self
         .export_info
@@ -460,12 +460,17 @@ impl VisitMut for UselessExportStmtRemover {
         .iter()
         .any(|export_specifier| match export_specifier {
           ExportSpecifierInfo::Named { local, .. } => match specifier {
-            farmfe_core::swc_ecma_ast::ExportSpecifier::Named(named_specifier) => {
-              match &named_specifier.orig {
-                ModuleExportName::Ident(ident) => ident.to_string() == *local,
-                _ => false,
-              }
-            }
+            ExportSpecifier::Named(named_specifier) => match &named_specifier.orig {
+              ModuleExportName::Ident(ident) => ident.to_string() == *local,
+              _ => false,
+            },
+            _ => false,
+          },
+          ExportSpecifierInfo::Namespace(local) => match specifier {
+            ExportSpecifier::Namespace(ns) => match &ns.name {
+              ModuleExportName::Ident(ident) => ident.to_string() == *local,
+              _ => false,
+            },
             _ => false,
           },
           _ => false,

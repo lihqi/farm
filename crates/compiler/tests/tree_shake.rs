@@ -18,8 +18,8 @@ use farmfe_toolkit::{
 };
 
 use crate::common::{
-  assert_compiler_result, create_compiler, create_compiler_with_plugins, create_config,
-  create_with_compiler,
+  assert_compiler_result, create_compiler, create_compiler_with_args, create_compiler_with_plugins,
+  create_config,
 };
 
 mod common;
@@ -54,12 +54,11 @@ fn tree_shake_development() {
       let cwd = file.parent().unwrap();
       let entry_name = "index".to_string();
 
-      let mut config = create_config(cwd.into(), crate_path);
-
-      config.input = HashMap::from([(entry_name.clone(), "./index.ts".to_string())]);
-      config.mode = farmfe_core::config::Mode::Development;
-
-      let compiler = create_with_compiler(config, vec![]);
+      let compiler = create_compiler_with_args(cwd.into(), crate_path, |mut config, plguin| {
+        config.input = HashMap::from([(entry_name.clone(), "./index.ts".to_string())]);
+        config.mode = farmfe_core::config::Mode::Development;
+        (config, plguin)
+      });
 
       compiler.compile().expect("failed compile");
 

@@ -59,6 +59,11 @@ impl NormalizedMinifyOptions {
       v
     });
 
+    minify_options.mangle = minify_options.mangle.map(|mut v| {
+      v.top_level = Some(true);
+      v
+    });
+
     minify_options
   }
 

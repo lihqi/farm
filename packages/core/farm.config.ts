@@ -27,6 +27,7 @@ export default <UserConfig>{
     sourcemap: false,
     persistentCache: false,
     progress: false,
+    mode: 'development',
     partialBundling: {
       enforceResources: [
         {
@@ -58,7 +59,7 @@ export default <UserConfig>{
                 param.importer.replace(VIRTUAL_SUFFIX, '')
               )
               .replace(/\\/g, '/');
-            console.log('relativePath', relativePath);
+
             if (
               relativePath === 'binding/binding.cjs' ||
               relativePath === 'binding/resolve-binding.cjs'
@@ -93,7 +94,6 @@ export default <UserConfig>{
           ]
         },
         async executor({ resolvedPath }) {
-          console.log('resolvedPath', resolvedPath);
           if (resolvedPath.endsWith(VIRTUAL_SUFFIX)) {
             const relativePath = path
               .relative(process.cwd(), resolvedPath.replace(VIRTUAL_SUFFIX, ''))
@@ -103,7 +103,6 @@ export default <UserConfig>{
               relativePath === 'binding/binding.cjs' ||
               relativePath === 'binding/resolve-binding.cjs'
             ) {
-              console.log(`module.exports = require('../../${relativePath}');`);
               return {
                 content: `module.exports = require('../../${relativePath}');`,
                 moduleType: 'js'

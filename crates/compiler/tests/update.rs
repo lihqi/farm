@@ -10,7 +10,7 @@ use farmfe_core::config::config_regex::ConfigRegex;
 use farmfe_core::config::persistent_cache::PersistentCacheConfig;
 use farmfe_core::config::{preset_env::PresetEnvConfig, Config, Mode, SourcemapConfig};
 use farmfe_core::plugin::UpdateType;
-use farmfe_testing_helpers::fixture;
+use farmfe_testing_helpers::{fixture, is_update_snapshot_from_env};
 
 mod common;
 
@@ -81,7 +81,7 @@ fn asset_update_result_code(
   if !output.exists() {
     std::fs::write(output, code).unwrap();
   } else {
-    if std::env::var("FARM_UPDATE_SNAPSHOTS").is_ok() {
+    if is_update_snapshot_from_env() {
       std::fs::write(output, code).unwrap();
     } else {
       let expected_code = std::fs::read_to_string(output).unwrap();

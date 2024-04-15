@@ -56,12 +56,13 @@ export default 'default';
     let tree_shake_module_map = HashMap::from([(module.id.clone(), tree_shake_module)]);
     module_graph.add_module(module);
 
-    let (import_info, export_info, removed_import_info, removed_export_info, _) = remove_useless_stmts(
-      &module_id,
-      &mut module_graph,
-      &tree_shake_module_map,
-      &globals,
-    );
+    let (import_info, export_info, removed_import_info, removed_export_info, _) =
+      remove_useless_stmts(
+        &module_id,
+        &mut module_graph,
+        &tree_shake_module_map,
+        &globals,
+      );
 
     println!("import_info: {:#?}", import_info);
     println!("export_info: {:#?}", export_info);

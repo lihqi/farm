@@ -12,7 +12,7 @@ use farmfe_core::{
 use farmfe_toolkit::script::swc_try_with::try_with;
 
 use crate::statement_graph::{
-  module_analyze::{ItemId, ItemIdType, Mode, ModuleAnalyze, ModuleAnalyzeItemEdge},
+  module_analyze::{ItemId, ItemIdType, Mode, ModuleAnalyze},
   ExportInfo, ExportSpecifierInfo, ImportInfo, StatementGraph, StatementId,
 };
 
